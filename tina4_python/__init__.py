@@ -44,7 +44,7 @@ else:
 load_env(environment)
 
 print(ShellColors.bright_yellow + "Setting debug mode", os.getenv("TINA4_DEBUG_LEVEL"), ShellColors.end)
-localize()
+
 
 if importlib.util.find_spec("jurigged"):
     import jurigged
@@ -52,13 +52,19 @@ if importlib.util.find_spec("jurigged"):
 # Define the variable to be used for global routes
 library_path = os.path.dirname(os.path.realpath(__file__))
 root_path = os.path.realpath(os.getcwd())
+
+if not os.path.exists(root_path + os.sep + "logs"):
+    os.makedirs(root_path + os.sep + "logs")
+
+localize()
+
 Debug(Messages.MSG_ASSUMING_ROOT_PATH.format(root_path=root_path, library_path=library_path),
       Constant.TINA4_LOG_INFO)
 
 
 tina4_routes = {}
 tina4_current_request = {}
-tina4_secret = None
+tina4_api_key = None
 tina4_auth = Auth(root_path)
 
 token = tina4_auth.get_token({"name": "Tina4"})
@@ -67,8 +73,8 @@ Debug("VALID TOKEN", tina4_auth.valid(token + "a"), Constant.TINA4_LOG_DEBUG)
 Debug("VALID TOKEN", tina4_auth.valid(token), Constant.TINA4_LOG_DEBUG)
 Debug("PAYLOAD", tina4_auth.get_payload(token), Constant.TINA4_LOG_DEBUG)
 
-if "TINA4_SECRET" in os.environ:
-    tina4_secret = os.environ["TINA4_SECRET"]
+if "API_KEY" in os.environ:
+    tina4_api_key = os.environ["API_KEY"]
 
 # Hack for local development
 if root_path.count("tina4_python") > 0:
@@ -80,6 +86,7 @@ if not os.path.exists(root_path + os.sep + "src"):
     os.makedirs(root_path + os.sep + "src" + os.sep + "scss")
     os.makedirs(root_path + os.sep + "src" + os.sep + "orm")
     os.makedirs(root_path + os.sep + "src" + os.sep + "app")
+
     with open(root_path + os.sep + "src" + os.sep + "__init__.py", 'w') as init_file:
         init_file.write('# Start your project here')
         init_file.write('\n')
