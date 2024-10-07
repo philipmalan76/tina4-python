@@ -86,11 +86,19 @@ class Router:
                 if Router.match(url, route['route']):
                     Debug("Route matched: " + route['route'], Constant.TINA4_LOG_DEBUG)
                     current_route = route
-                    exit
+                    break
 
             # If the route is not found
             if current_route is None:
-                return Response(content, Constant.HTTP_NOT_FOUND, Constant.TEXT_HTML)
+                if content_type == "application/json":
+                    content = {"error": "404 - Not Found", "data": {"server": {"url": url}}};
+                    content_type = Constant.APPLICATION_JSON
+                else:
+                    content = Template.render_twig_template(
+                        "errors/404.twig", {"server": {"url": url}})
+                    content_type = Constant.TEXT_HTML
+
+                return Response(content, Constant.HTTP_NOT_FOUND, content_type)
 
             # if we need to execute middleware
             if "middleware" in current_route:
@@ -202,28 +210,25 @@ class Router:
             Request.raw_data = request["raw_data"] if "raw_data" in request else None
             Request.raw_request = request["raw_request"] if "raw_request" in request else None
             Request.raw_content = request["raw_content"] if "raw_content" in request else None
-                Request.url = url
+            Request.url = url
 
-                tina4_python.tina4_current_request = Request
+            tina4_python.tina4_current_request = Request
 
-                old_stdout = sys.stdout # Memorize the default stdout stream
-                sys.stdout = buffer = io.StringIO()
-                result = await router_response(request=Request, response=Response)
+            old_stdout = sys.stdout # Memorize the default stdout stream
+            sys.stdout = buffer = io.StringIO()
+            result = await router_response(request=Request, response=Response)
 
-                if "cache" in route and route["cache"] is not None:
-                    if not route["cache"]["cached"]:
-                        result.headers["Cache-Control"] = "max-age=1, must-revalidate"
-                        result.headers["Pragma"] = "no-cache"
-                        result.headers["Clear-Site-Data"] =  "cache"
-                    else:
-                        result.headers["Cache-Control"] = "max-age="+str(route["cache"]["max_age"])+", must-revalidate"
-                        result.headers["Pragma"] = "cache"
+            if "cache" in route and route["cache"] is not None:
+                if not route["cache"]["cached"]:
+                    result.headers["Cache-Control"] = "max-age=1, must-revalidate"
+                    result.headers["Pragma"] = "no-cache"
+                    result.headers["Clear-Site-Data"] =  "cache"
                 else:
-                    result.headers["Cache-Control"] = "max-age=-1, must-revalidate"
+                    result.headers["Cache-Control"] = "max-age="+str(route["cache"]["max_age"])+", must-revalidate"
                     result.headers["Pragma"] = "cache"
-
-
-                break
+            else:
+                result.headers["Cache-Control"] = "max-age=-1, must-revalidate"
+                result.headers["Pragma"] = "cache"
 
         if result is None:
             sys.stdout = old_stdout
