@@ -202,11 +202,28 @@ class Router:
             Request.raw_data = request["raw_data"] if "raw_data" in request else None
             Request.raw_request = request["raw_request"] if "raw_request" in request else None
             Request.raw_content = request["raw_content"] if "raw_content" in request else None
+                Request.url = url
 
-            tina4_python.tina4_current_request = Request
-            old_stdout = sys.stdout # Memorize the default stdout stream
-            sys.stdout = buffer = io.StringIO()
-            result = await router_response(request=Request, response=Response)
+                tina4_python.tina4_current_request = Request
+
+                old_stdout = sys.stdout # Memorize the default stdout stream
+                sys.stdout = buffer = io.StringIO()
+                result = await router_response(request=Request, response=Response)
+
+                if "cache" in route and route["cache"] is not None:
+                    if not route["cache"]["cached"]:
+                        result.headers["Cache-Control"] = "max-age=1, must-revalidate"
+                        result.headers["Pragma"] = "no-cache"
+                        result.headers["Clear-Site-Data"] =  "cache"
+                    else:
+                        result.headers["Cache-Control"] = "max-age="+str(route["cache"]["max_age"])+", must-revalidate"
+                        result.headers["Pragma"] = "cache"
+                else:
+                    result.headers["Cache-Control"] = "max-age=-1, must-revalidate"
+                    result.headers["Pragma"] = "cache"
+
+
+                break
 
         if result is None:
             sys.stdout = old_stdout
@@ -228,9 +245,12 @@ class Router:
                 Debug("Looking for twig file",
                       tina4_python.root_path + os.sep + "src" + os.sep + "templates" + os.sep + twig_file,
                       Constant.TINA4_LOG_DEBUG)
+
+                result.headers["Cache-Control"] = "max-age=-1, public"
+                result.headers["Pragma"] = "no-cache"
                 content = Template.render_twig_template(twig_file, {"request": tina4_python.tina4_current_request})
                 if content != "":
-                    return Response(content, Constant.HTTP_OK, Constant.TEXT_HTML)
+                    return Response(content, Constant.HTTP_OK, Constant.TEXT_HTML, result.headers)
 
         if result.http_code == Constant.HTTP_NOT_FOUND:
             content = Template.render_twig_template(
@@ -255,7 +275,7 @@ class Router:
     def add(method, route, callback, middleware=None):
         Debug("Adding a route: " + route, Constant.TINA4_LOG_DEBUG)
         if not callback in tina4_python.tina4_routes:
-            tina4_python.tina4_routes[callback] = {"route": route, "callback": callback, "method": method, "swagger": None}
+            tina4_python.tina4_routes[callback] = {"route": route, "callback": callback, "method": method, "swagger": None, "cached": False}
         else:
             tina4_python.tina4_routes[callback]["route"] = route
             tina4_python.tina4_routes[callback]["callback"] = callback
@@ -343,3 +363,18 @@ def delete(path, middleware=None):
         return callback
 
     return actual_delete
+
+def cached(is_cached, max_age=60):
+    """
+    Sets whether the route is cached or not
+    :param is_cached:
+    :param max_age:
+    :return:
+    """
+    def actual_cached(callback):
+        if callback not in tina4_python.tina4_routes:
+            tina4_python.tina4_routes[callback] = {}
+        tina4_python.tina4_routes[callback]["cache"] = {"cached": is_cached, "max_age": max_age}
+        return callback
+
+    return actual_cached

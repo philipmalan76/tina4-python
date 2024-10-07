@@ -111,11 +111,13 @@ class Webserver:
         else:
             body = None
 
-        request = {"params": params, "body": body, "raw_data": self.request, "headers": self.lowercase_headers, "raw_request": self.request_raw, "raw_content": self.content_raw}
+        request = {"params": params, "body": body, "raw_data": self.request, "url": self.path, "headers": self.lowercase_headers, "raw_request": self.request_raw, "raw_content": self.content_raw}
 
         tina4_python.tina4_current_request = request
 
         response = await self.router_handler.resolve(method, self.path, request, self.lowercase_headers, self.session)
+
+
 
         if HTTP_REDIRECT != response.http_code:
             self.send_header("Access-Control-Allow-Origin", "*", headers)
@@ -135,8 +137,6 @@ class Webserver:
         # add the custom headers from the response
         for response_header in response.headers:
             self.send_header(response_header, response.headers[response_header], headers)
-
-
 
         headers = await self.get_headers(headers, self.response_protocol, response.http_code)
 
@@ -222,8 +222,8 @@ class Webserver:
 
         # parse cookies
         cookie_list = {}
-        if "Cookie" in self.headers:
-            cookie_list_temp = self.headers["Cookie"].split(";")
+        if "cookie" in self.lowercase_headers:
+            cookie_list_temp = self.lowercase_headers["cookie"].split(";")
             for cookie_value in cookie_list_temp:
                 cookie = cookie_value.split("=", 1)
                 cookie_list[cookie[0].strip()] = cookie[1].strip()
